@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Klinik PMI - Data Pasien (Device B)</title>
+<style>
+  body{font-family:Arial,sans-serif;max-width:960px;margin:20px auto;padding:0 12px;background:#f7f7f7}
+  h1{color:#c62828} .card{background:#fff;padding:16px;border-radius:8px;margin-bottom:16px;box-shadow:0 1px 3px #0002}
+  input,select,button{padding:10px;font-size:16px;margin:3px;border:1px solid #bbb;border-radius:4px}
+  button{cursor:pointer;background:#c62828;color:#fff;border:none} button.sec{background:#555}
+  table{width:100%;border-collapse:collapse} th,td{padding:8px;border-bottom:1px solid #ddd;text-align:left;font-size:14px}
+  th{background:#ffebee} #status{font-size:13px;margin-top:6px}
+</style>
+</head>
+<body>
+<h1>🩸 Klinik PMI - Data Pasien</h1>
+
+<div class="card">
+  <b>URL Server (Device A):</b>
+  <input id="apiUrl" size="32" value="http://192.168.1.10:5000">
+  <button class="sec" onclick="saveUrl()">Simpan & Muat</button>
+  <div id="status"></div>
+</div>
+
+<div class="card">
+  <h3 id="formTitle">Tambah Pasien</h3>
+  <input type="hidden" id="pid">
+  <input id="no_rm" placeholder="No. RM">
+  <input id="nama" placeholder="Nama">
+  <input id="umur" type="number" placeholder="Umur">
+  <select id="jenis_kelamin"><option>Laki-laki</option><option>Perempuan</option></select>
+  <select id="golongan_darah"><option>A</option><option>B</option><option>AB</option><option>O</option></select>
+  <input id="keluhan" placeholder="Keluhan">
+  <input id="tanggal_kunjungan" type="date">
+  <button onclick="simpan()">Simpan</button>
+  <button class="sec" onclick="resetForm()">Batal</button>
+</div>
+
+<div class="card">
+  <input id="cari" placeholder="Cari nama..." oninput="muat()">
+  <div style="overflow-x:auto"><table>
+    <thead><tr><th>No. RM</th><th>Nama</th><th>Umur</th><th>JK</th><th>Gol.Darah</th><th>Keluhan</th><th>Kunjungan</th><th>Aksi</th></tr></thead>
+    <tbody id="tbody"></tbody>
+  </table></div>
+</div>
+
+<script>
+const F = ["no_rm","nama","umur","jenis_kelamin","golongan_darah","keluhan","tanggal_kunjungan"];
+let data = [];
+const API = () => document.getElementById("apiUrl").value.replace(/\/$/, "") + "/api/pasien";
+const $ = id => document.getElementById(id);
+// Escape teks agar aman ditampilkan lewat innerHTML (cegah XSS)
+const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+function status(msg, ok=true){ $("status").textContent = msg; $("status").style.color = ok ? "green" : "red"; }
+function saveUrl(){ try{localStorage.setItem("apiUrl",$("apiUrl").value)}catch(e){} muat(); }
+
+// Jika halaman dibuka dari server Flask (lokal :5000 ATAU hosting tanpa port),
+// otomatis pakai alamat itu. Hanya jika dibuka via http.server :8080 atau file://
+// URL diisi manual.
+if(location.protocol.startsWith("http") && location.port!=="8080"){ $("apiUrl").value = location.origin; }
+else{ try{ if(localStorage.getItem("apiUrl")) $("apiUrl").value = localStorage.getItem("apiUrl"); }catch(e){} }
+
+// GET
+async function muat(){
+  try{
+    const r = await fetch(API() + "?q=" + encodeURIComponent($("cari").value));
+    data = await r.json();
+    $("tbody").innerHTML = data.map(p => `<tr>
+      <td>${esc(p.no_rm)}</td><td>${esc(p.nama)}</td><td>${esc(p.umur)}</td><td>${esc(p.jenis_kelamin)}</td>
+      <td>${esc(p.golongan_darah)}</td><td>${esc(p.keluhan)}</td><td>${esc(p.tanggal_kunjungan)}</td>
+      <td><button class="sec" onclick="edit(${Number(p.id)})">Edit</button>
+          <button onclick="hapus(${Number(p.id)})">Hapus</button></td></tr>`).join("");
+    status("Terhubung ke server ✔ (" + data.length + " data)");
+  }catch(e){ status("Gagal terhubung ke server: " + e.message, false); }
+}
+
+// POST / PUT
+async function simpan(){
+  const body = {}; F.forEach(f => body[f] = $(f).value);
+  const id = $("pid").value;
+  const r = await fetch(id ? API()+"/"+id : API(), {
+    method: id ? "PUT" : "POST",
+    headers: {"Content-Type":"application/json"}, body: JSON.stringify(body)
+  });
+  const j = await r.json();
+  status(j.message || j.error, r.ok);
+  if(r.ok){ resetForm(); muat(); }
+}
+
+function edit(id){
+  const p = data.find(x => x.id === id);
+  F.forEach(f => $(f).value = p[f] ?? ""); $("pid").value = id;
+  $("formTitle").textContent = "Edit Pasien (ID " + id + ")"; scrollTo(0,0);
+}
+function resetForm(){ F.forEach(f => $(f).value = ""); $("pid").value = ""; $("formTitle").textContent = "Tambah Pasien"; }
+
+// DELETE
+async function hapus(id){
+  if(!confirm("Hapus data pasien ini?")) return;
+  const r = await fetch(API()+"/"+id, {method:"DELETE"});
+  const j = await r.json(); status(j.message || j.error, r.ok); muat();
+}
+muat();
+</script>
+</body>
+</html>
