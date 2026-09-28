@@ -72,7 +72,7 @@ def ser(r):
 # ---------- Penanganan error umum (selalu balas JSON) ----------
 @app.errorhandler(psycopg2.OperationalError)
 def db_unreachable(e):
-    return jsonify({"error": "Tidak bisa terhubung ke database. Cek DATABASE_URL."}), 503
+    return jsonify({"error": "Tidak bisa terhubung ke database", "detail": str(e)}), 503
 
 
 @app.errorhandler(psycopg2.DataError)
